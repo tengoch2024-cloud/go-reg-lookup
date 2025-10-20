@@ -26,8 +26,8 @@ jobs:
 
       - name: Fetch masked data from GAS (follow redirects)
         env:
-          GAS_EXEC_URL: ${{ secrets.GAS_EXEC_URL }}   # e.g. https://script.google.com/macros/s/xxx/exec
-          GAS_KEY: ${{ secrets.GAS_KEY }}             # 你的 API_KEY（若有）
+          GAS_EXEC_URL: ${{ secrets.GAS_EXEC_URL }}   
+          GAS_KEY: ${{ secrets.GAS_KEY }}             
         run: |
           set -e
           if [ -z "${GAS_EXEC_URL}" ]; then
