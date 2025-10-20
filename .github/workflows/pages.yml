@@ -5,7 +5,7 @@ on:
   push:
     branches: [ main ]
   schedule:
-    - cron: "*/30 * * * *"
+    - cron: "*/30 * * * *"   # 每 30 分鐘自動更新一次
 
 permissions:
   contents: read
@@ -26,8 +26,8 @@ jobs:
 
       - name: Fetch masked data from GAS (follow redirects)
         env:
-          GAS_EXEC_URL: ${{ secrets.GAS_EXEC_URL }}
-          GAS_KEY: ${{ secrets.GAS_KEY }}
+          GAS_EXEC_URL: ${{ secrets.GAS_EXEC_URL }}   # e.g. https://script.google.com/macros/s/xxx/exec
+          GAS_KEY: ${{ secrets.GAS_KEY }}             # 你的 API_KEY（若有）
         run: |
           set -e
           if [ -z "${GAS_EXEC_URL}" ]; then
@@ -35,14 +35,14 @@ jobs:
           fi
 
           URL="${GAS_EXEC_URL}"
-          # 有金鑰就加上；沒有就不要設 GAS_KEY
+          # 若有金鑰就附加；沒有就別設 GAS_KEY
           if [ -n "${GAS_KEY}" ]; then
             SEP=$(echo "${URL}" | grep -q '?' && echo '&' || echo '?')
             URL="${URL}${SEP}key=${GAS_KEY}&limit=500&order=asc"
           fi
 
           echo "==> GET (follow redirects) $URL"
-          # 關鍵：用 -L 跟隨 302；拿最後一跳的 HTTP code
+          # 關鍵：-L 追隨 302 轉址；取最後一跳狀態碼
           HTTP_CODE=$(curl -sS -L -o dist/data.raw.json -w "%{http_code}" "$URL" || true)
           echo "HTTP_CODE=$HTTP_CODE"
 
@@ -52,7 +52,7 @@ jobs:
             exit 1
           fi
 
-          # 若內容是 HTML（例如登入頁），也視為錯誤
+          # 如果被導到登入頁（HTML），也視為錯誤
           if head -c 400 dist/data.raw.json | grep -qi '<html'; then
             echo "::error ::收到 HTML（可能是登入頁或權限未開放）"
             head -c 500 dist/data.raw.json || true
@@ -62,7 +62,7 @@ jobs:
           # 驗證 JSON
           node -e 'try{JSON.parse(require("fs").readFileSync("dist/data.raw.json","utf8"));}catch(e){console.error("JSON 解析失敗：",e.message);process.exit(1);}'
 
-          # 正規化：若是 {ok:true,data:[...]} 就取 data；否則保持原狀
+          # 正規化：若為 {ok:true,data:[...]} 則取 data；否則保持原狀
           node -e 'const fs=require("fs");let t=fs.readFileSync("dist/data.raw.json","utf8");let j=JSON.parse(t);if(j&&Array.isArray(j.data)) j=j.data;fs.writeFileSync("dist/data.json",JSON.stringify(j));'
 
           # 必須是陣列
