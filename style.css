@@ -1,42 +1,95 @@
-:root{
-  --bg:#f5f7fb; --card:#fff; --border:#e5e7eb;
-  --text:#0f172a; --muted:#64748b;
-  --brand:#16a34a; --brand-2:#2563eb;
+// 讀取部署產物 data.json；若是 {ok:true,data:[...]} 也會自動相容
+const $ = (s) => document.querySelector(s);
+
+let raw = [];         // 原始遮蔽資料
+let groups = new Set();
+
+async function loadData(){
+  const res = await fetch(`./data.json?v=${Date.now()}`, { cache:'no-store' });
+  let j = await res.json();
+  if (j && Array.isArray(j.data)) j = j.data; // 容錯：支援 {ok:true,data:[...]}
+
+  // 正規化並建立群組清單
+  const last3 = (phoneLast4) => String(phoneLast4||'').slice(-3);
+  raw = j.map((r,i)=>({
+    idx: i+1,
+    maskedName: r.maskedName ?? r.name ?? '',
+    phoneLast3: last3(r.phoneLast4 ?? r.phone),
+    group: r.group ?? '',
+    createdAt: Number(r.createdAt||0) || 0
+  })).sort((a,b)=>(a.createdAt||0)-(b.createdAt||0));
+
+  groups = new Set(raw.map(x=>x.group).filter(Boolean));
+  renderGroupSelect();
+  // 首次渲染（無條件）
+  renderResults();
 }
-*{box-sizing:border-box}
-body{font-family:system-ui,-apple-system,"Microsoft JhengHei",sans-serif;margin:0;background:var(--bg);color:var(--text)}
-.container{max-width:980px;margin:32px auto 24px;background:var(--card);border:1px solid var(--border);border-radius:14px;padding:22px}
-.topbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
-.topbar h1{margin:0;font-size:24px}
-.note{color:var(--muted)}
 
-.controls{display:flex;gap:12px;align-items:end;margin:18px 0 10px;flex-wrap:wrap}
-.field{display:flex;flex-direction:column;gap:6px}
-.field.grow{flex:1 1 280px}
-label{font-size:14px;color:var(--muted)}
-input[type="search"], select{
-  height:40px;padding:8px 10px;border:1px solid var(--border);
-  border-radius:8px;background:#fff;min-width:220px;
+function renderGroupSelect(){
+  const sel = $('#group');
+  // 清空保留第一個空選項
+  sel.querySelectorAll('option:not(:first-child)').forEach(o=>o.remove());
+  [...groups].sort().forEach(g=>{
+    const opt = document.createElement('option');
+    opt.value = g; opt.textContent = g;
+    sel.appendChild(opt);
+  });
 }
-#q{width:100%}
 
-.btn{height:40px;padding:0 14px;border-radius:8px;border:1px solid var(--border);cursor:pointer}
-.btn.primary{background:var(--brand);border-color:var(--brand);color:#fff}
-.btn.secondary{background:#eef2ff;color:#1f2937}
-
-.card{border:1px solid var(--border);border-radius:12px;padding:14px 0;margin-top:8px}
-h2{font-size:18px;margin:0 16px 10px}
-
-.table{width:100%}
-.tr{display:grid;grid-template-columns:80px 1.2fr 1fr 1fr;gap:10px;align-items:center}
-.thead{background:#eef2ff;padding:10px 16px;font-weight:700;border-top:1px solid var(--border);border-bottom:1px solid var(--border)}
-.td{padding:10px 16px}
-.row{border-bottom:1px solid var(--border)}
-.num{width:80px}
-.empty{color:var(--muted);text-align:center;padding:22px}
-
-.footer{max-width:980px;margin:0 auto 26px;color:var(--muted);font-size:12px;padding:0 4px}
-@media (max-width:680px){
-  .tr{grid-template-columns:56px 1.2fr 1fr 1fr}
-  .num{width:56px}
+function applyFilter(){
+  const g = $('#group').value.trim();
+  const q = $('#q').value.trim();
+  return raw.filter(item=>{
+    const byGroup = g ? item.group === g : true;
+    if (!q) return byGroup;
+    // 姓名包含 或 電話末碼結尾相符（支援 1~3 碼）
+    const hitName = item.maskedName.includes(q);
+    const hitPhone = item.phoneLast3.endsWith(q.replace(/\D/g,''));
+    return byGroup && (hitName || hitPhone);
+  });
 }
+
+function renderResults(){
+  const list = applyFilter();
+  const rowsEl = $('#rows');
+  const emptyEl = $('#empty');
+  const q = $('#q').value.trim();
+  const g = $('#group').value.trim();
+  const title = (() => {
+    if (q && g) return `搜尋「${q}」且組別「${g}」的結果`;
+    if (q) return `搜尋「${q}」的結果`;
+    if (g) return `組別「${g}」的名單`;
+    return '查詢結果';
+  })();
+  $('#result-title').textContent = title;
+
+  if (!list.length){
+    rowsEl.innerHTML = '';
+    emptyEl.hidden = false;
+    return;
+  }
+  emptyEl.hidden = true;
+
+  rowsEl.innerHTML = list.map((r,i)=>`
+    <div class="tr row">
+      <div class="td num">${i+1}</div>
+      <div class="td name">${escapeHtml(r.maskedName)}</div>
+      <div class="td phone">*******${escapeHtml(r.phoneLast3)}</div>
+      <div class="td group">${escapeHtml(r.group)}</div>
+    </div>
+  `).join('');
+}
+
+function escapeHtml(s){
+  return String(s??'').replace(/[&<>"']/g, m => ({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+  }[m]));
+}
+
+/* 事件 */
+$('#btn-search').addEventListener('click', renderResults);
+$('#q').addEventListener('keydown', (e)=>{ if(e.key==='Enter') renderResults(); });
+$('#group').addEventListener('change', renderResults);
+$('#btn-home').addEventListener('click', ()=>{ $('#group').value=''; $('#q').value=''; renderResults(); });
+
+document.addEventListener('DOMContentLoaded', loadData);
