@@ -1,0 +1,17 @@
+body{
+  font-family:system-ui,-apple-system,'Microsoft JhengHei',sans-serif;
+  background:#f5f7fb;margin:0
+}
+.container{
+  max-width:880px;margin:40px auto;background:#fff;
+  border:1px solid #e5e7eb;border-radius:12px;padding:24px
+}
+h1{margin:0 0 12px}
+.hint{color:#6b7280;font-size:0.9em;margin-bottom:16px}
+.item{
+  display:grid;grid-template-columns:48px 1.2fr 1fr 1fr;
+  gap:10px;padding:10px;border:1px solid #eee;border-radius:8px;
+  margin-top:8px;background:#fff
+}
+.header{background:#eef2ff;font-weight:700}
+.empty{color:#64748b;text-align:center;padding:40px 0}
