@@ -1,54 +1,59 @@
 <!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>圍棋比賽報名結果查詢</title>
-  <link rel="stylesheet" href="./style.css?v=2">
+  <link rel="stylesheet" href="./style.css?v=3" />
 </head>
 <body>
-  <div class="container">
-    <header class="topbar">
-      <button id="btn-home" class="btn secondary">回首頁</button>
-      <h1>圍棋比賽報名結果查詢</h1>
-      <small class="note">此頁面僅顯示報名先後與基本資訊，<b>個資已遮蔽</b>，不代表實際比賽編碼。</small>
-    </header>
-
-    <section class="controls">
-      <div class="field">
-        <label for="group">分組查詢：</label>
-        <select id="group">
-          <option value="">-- 請選擇組別 --</option>
-        </select>
-      </div>
-
-      <div class="field grow">
-        <label for="q">姓名/電話搜尋：</label>
-        <input id="q" type="search" placeholder="例如：陳小明 或 678（電話末三碼）" />
-      </div>
-
-      <button id="btn-search" class="btn primary">搜尋</button>
-    </section>
-
+  <main class="wrap">
     <section class="card">
-      <h2 id="result-title">搜尋結果</h2>
-      <div class="table">
-        <div class="tr thead">
-          <div class="td num">序號</div>
-          <div class="td name">姓名</div>
-          <div class="td phone">電話（末三碼）</div>
-          <div class="td group">組別</div>
+      <header class="card__header">
+        <button id="btn-home" class="btn btn-secondary" type="button">回首頁</button>
+        <h1 class="title">圍棋比賽報名結果查詢</h1>
+        <p class="note">此頁面僅顯示報名順序與基本資訊，<b>個資已遮蔽</b>，不代表實際比賽編碼。</p>
+      </header>
+
+      <div class="controls">
+        <div class="control">
+          <label for="group">分組查詢：</label>
+          <select id="group" class="input">
+            <option value="">-- 請選擇組別 --</option>
+          </select>
         </div>
-        <div id="rows"></div>
+
+        <div class="control control--grow">
+          <label for="q">姓名/電話搜尋：</label>
+          <input id="q" class="input" type="search" placeholder="例如：陳小明 或 678（電話末三碼）" />
+        </div>
+
+        <div class="control control--button">
+          <label class="placeholder">&nbsp;</label>
+          <button id="btn-search" class="btn btn-primary" type="button">搜尋</button>
+        </div>
       </div>
+
+      <h2 id="result-title" class="subtitle">查詢結果</h2>
+
+      <div class="table">
+        <div class="thead">
+          <div class="th th--num">序號</div>
+          <div class="th">姓名</div>
+          <div class="th">電話（末三碼）</div>
+          <div class="th">組別</div>
+        </div>
+        <div id="rows" class="tbody" aria-live="polite"></div>
+      </div>
+
       <p id="empty" class="empty" hidden>目前沒有符合條件的資料</p>
+
+      <footer class="card__footer">
+        <small>ⓘ 本頁每 30 分鐘自動更新（GitHub Actions 部署）。如需立即更新，請於 Actions 手動觸發。</small>
+      </footer>
     </section>
-  </div>
+  </main>
 
-  <footer class="footer">
-    <small>ⓘ 資料每 30 分鐘更新一次；如需立即更新請於 GitHub Actions 手動觸發部署。</small>
-  </footer>
-
-  <script src="./script.js?v=2" defer></script>
+  <script src="./script.js?v=3" defer></script>
 </body>
 </html>
