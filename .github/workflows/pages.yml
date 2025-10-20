@@ -1,4 +1,5 @@
 name: Build & Deploy Pages (with runtime data)
+
 on:
   workflow_dispatch:
   push:
@@ -19,22 +20,47 @@ jobs:
 
       - name: Prepare dist
         run: |
+          set -e
           mkdir -p dist
           cp index.html style.css script.js .nojekyll dist/
 
-      - name: Fetch masked data from GAS
+      - name: Fetch masked data from GAS (with diagnostics)
         env:
           GAS_EXEC_URL: ${{ secrets.GAS_EXEC_URL }}
           GAS_KEY: ${{ secrets.GAS_KEY }}
         run: |
           set -e
-          URL="${GAS_EXEC_URL}"
-          if [ -n "${GAS_KEY}" ]; then
-            URL="${URL}?key=${GAS_KEY}&limit=500&order=asc"
+          if [ -z "${GAS_EXEC_URL}" ]; then
+            echo "::error ::Secret GAS_EXEC_URL 未設定"; exit 1
           fi
-          curl -sSL "$URL" -o dist/data.json
-          test -s dist/data.json
-          node -e "JSON.parse(require('fs').readFileSync('dist/data.json','utf8'))"
+
+          URL="${GAS_EXEC_URL}"
+          # 若你的 GAS 有金鑰驗證就會自動附加
+          if [ -n "${GAS_KEY}" ]; then
+            SEP=$(echo "${URL}" | grep -q '?' && echo '&' || echo '?')
+            URL="${URL}${SEP}key=${GAS_KEY}&limit=500&order=asc"
+          fi
+
+          echo "==> GET $URL"
+          # 取回應與 HTTP 狀態碼
+          HTTP_CODE=$(curl -sS -w "%{http_code}" -o dist/data.raw.json "$URL" || true)
+          echo "HTTP_CODE=$HTTP_CODE"
+
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "::error ::GAS 回傳非 200，實際為 $HTTP_CODE"
+            echo "前 500 字回應內容："
+            head -c 500 dist/data.raw.json || true
+            exit 1
+          fi
+
+          # 先驗證 JSON；若失敗就把原文印出來
+          node -e 'try{JSON.parse(require("fs").readFileSync("dist/data.raw.json","utf8"));}catch(e){console.error("JSON 解析失敗：",e.message);process.exit(1);}'
+
+          # 正規化：若是 {ok:true,data:[...]} 就取 data；否則保持原狀
+          node -e 'const fs=require("fs");let t=fs.readFileSync("dist/data.raw.json","utf8");let j=JSON.parse(t);if(j&&Array.isArray(j.data)) j=j.data;fs.writeFileSync("dist/data.json",JSON.stringify(j));'
+
+          # 額外檢查：必須是陣列
+          node -e 'const j=require("./dist/data.json");if(!Array.isArray(j)){console.error("期望為陣列，但得到：",typeof j);process.exit(1)}console.log("資料筆數：",j.length);if(j.length){console.log("第一筆：",JSON.stringify(j[0]).slice(0,200));}'
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
