@@ -1,95 +1,115 @@
 const $ = (s) => document.querySelector(s);
 
-let DATA = [];          // 轉換後的資料
-let GROUPS = new Set(); // 群組列表
+let DATA = [];
+let GROUPS = new Set();
 
-/* 初始化 */
 document.addEventListener('DOMContentLoaded', async () => {
-  disableControls(true);
+  toggleDisabled(true);
   await loadData();
   bindEvents();
-  disableControls(false);
-  render(); // 初始顯示（無條件）
+  render();          // 初次渲染
+  toggleDisabled(false);
 });
 
-function disableControls(disabled){
-  $('#btn-home').disabled = disabled;
-  $('#btn-search').disabled = disabled;
-  $('#group').disabled = disabled;
-  $('#q').disabled = disabled;
+function toggleDisabled(disabled){
+  ['#btn-home','#btn-search','#group','#q'].forEach(id=>{
+    const el = $(id); if (el) el.disabled = disabled;
+  });
 }
 
-/* 讀取資料（相容兩種格式：純陣列 or {ok:true,data:[…]}） */
+/* === 關鍵：更耐髒的欄位對應 === */
+const getVal = (obj, keys) => {
+  for (const k of keys) {
+    // 容忍中文/空白差異：去除所有空白再比
+    const found = Object.keys(obj).find(kk =>
+      kk.replace(/\s+/g,'') === String(k).replace(/\s+/g,'')
+    );
+    if (found && obj[found] != null && String(obj[found]).trim() !== '') {
+      return obj[found];
+    }
+  }
+  return '';
+};
+
+const DIGITS = s => String(s ?? '').replace(/[^\d]/g,'');
+const lastN = (s, n) => DIGITS(s).slice(-n);
+
 async function loadData(){
   try{
     const res = await fetch(`./data.json?v=${Date.now()}`, { cache:'no-store' });
     let j = await res.json();
-    if (j && Array.isArray(j.data)) j = j.data;
+    if (j && Array.isArray(j.data)) j = j.data; // 相容 { ok:true, data:[...] }
 
-    const last3 = (s)=> String(s||'').replace(/[^\d]/g,'').slice(-3);
-    DATA = j.map((r, i) => ({
-      seq: i + 1,
-      name: r.maskedName ?? r.name ?? '',
-      phone3: last3(r.phoneLast4 ?? r.phone),
-      group: r.group ?? '',
-      createdAt: Number(r.createdAt||0) || 0
-    })).sort((a,b)=>(a.createdAt||0)-(b.createdAt||0));
+    DATA = j.map((raw, i) => {
+      const name = getVal(raw, ['maskedName','姓名','name','選手姓名']);
+      const phone4 = getVal(raw, ['phoneLast4','phone','電話','手機']);
+      const group  = String(getVal(raw, ['group','組別','報名組別'])).trim();
+      const createdAt = Number(getVal(raw, ['createdAt','時間戳記','timestamp'])) || 0;
 
-    GROUPS = new Set(DATA.map(x=>x.group).filter(Boolean));
+      return {
+        seq: i + 1,
+        name: name || '',
+        phone3: lastN(phone4, 3),     // 末三碼顯示
+        group: group || '',
+        createdAt
+      };
+    }).sort((a,b)=>(a.createdAt||0)-(b.createdAt||0));
+
+    // 建立群組選單（過濾空白、去重、排序）
+    GROUPS = new Set(DATA.map(x=>x.group).filter(g=>String(g).trim()!==''));
     populateGroupSelect();
   }catch(err){
-    console.error(err);
+    console.error('loadData error:', err);
     $('#rows').innerHTML = '';
     $('#empty').hidden = false;
     $('#empty').textContent = '載入資料失敗或尚未部署。';
   }
 }
 
-/* 綁定事件 */
-function bindEvents(){
-  $('#btn-home').addEventListener('click', () => {
-    $('#group').value = '';
-    $('#q').value = '';
-    render();
-  });
-  $('#btn-search').addEventListener('click', () => render());
-  $('#q').addEventListener('keydown', (e)=>{ if(e.key === 'Enter') render(); });
-  $('#group').addEventListener('change', () => render());
-}
-
-/* 產生群組下拉 */
 function populateGroupSelect(){
   const sel = $('#group');
+  if (!sel) return;
+  // 清空保留第一個空選項
   sel.querySelectorAll('option:not(:first-child)').forEach(o=>o.remove());
-  [...GROUPS].sort().forEach(g=>{
+  const arr = [...GROUPS].sort((a,b)=> String(a).localeCompare(String(b), 'zh-Hant'));
+  arr.forEach(g=>{
     const opt = document.createElement('option');
     opt.value = g; opt.textContent = g;
     sel.appendChild(opt);
   });
 }
 
-/* 依條件篩選 */
+function bindEvents(){
+  $('#btn-home')?.addEventListener('click', () => {
+    $('#group').value = '';
+    $('#q').value = '';
+    render();
+  });
+  $('#btn-search')?.addEventListener('click', render);
+  $('#q')?.addEventListener('keydown', (e)=>{ if(e.key === 'Enter') render(); });
+  $('#group')?.addEventListener('change', render);
+}
+
 function getFiltered(){
-  const g = $('#group').value.trim();
-  const q = $('#q').value.trim();
-  const qNum = q.replace(/[^\d]/g,''); // 只取數字比電話
+  const g = String($('#group').value || '').trim();
+  const q = String($('#q').value || '').trim();
+  const qNum = DIGITS(q);
   return DATA.filter(item=>{
     const okGroup = g ? item.group === g : true;
     if (!q) return okGroup;
-    const hitName = item.name.includes(q);
+    const hitName  = item.name.includes(q);
     const hitPhone = qNum ? item.phone3.endsWith(qNum) : false;
     return okGroup && (hitName || hitPhone);
   });
 }
 
-/* 結果渲染 */
 function render(){
   const list = getFiltered();
   const rowsEl = $('#rows');
   const emptyEl = $('#empty');
 
-  const g = $('#group').value.trim();
-  const q = $('#q').value.trim();
+  const g = String($('#group').value || '').trim();
+  const q = String($('#q').value || '').trim();
   $('#result-title').textContent =
     q && g ? `搜尋「${q}」且組別「${g}」的結果`
     : q ? `搜尋「${q}」的結果`
@@ -98,8 +118,8 @@ function render(){
 
   if (!list.length){
     rowsEl.innerHTML = '';
-    emptyEl.textContent = '目前沒有符合條件的資料';
     emptyEl.hidden = false;
+    emptyEl.textContent = '目前沒有符合條件的資料';
     return;
   }
   emptyEl.hidden = true;
