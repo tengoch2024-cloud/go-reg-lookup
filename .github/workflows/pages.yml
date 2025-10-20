@@ -24,7 +24,7 @@ jobs:
           mkdir -p dist
           cp index.html style.css script.js .nojekyll dist/
 
-      - name: Fetch masked data from GAS (with diagnostics)
+      - name: Fetch masked data from GAS (follow redirects)
         env:
           GAS_EXEC_URL: ${{ secrets.GAS_EXEC_URL }}
           GAS_KEY: ${{ secrets.GAS_KEY }}
@@ -35,31 +35,37 @@ jobs:
           fi
 
           URL="${GAS_EXEC_URL}"
-          # 若你的 GAS 有金鑰驗證就會自動附加
+          # 有金鑰就加上；沒有就不要設 GAS_KEY
           if [ -n "${GAS_KEY}" ]; then
             SEP=$(echo "${URL}" | grep -q '?' && echo '&' || echo '?')
             URL="${URL}${SEP}key=${GAS_KEY}&limit=500&order=asc"
           fi
 
-          echo "==> GET $URL"
-          # 取回應與 HTTP 狀態碼
-          HTTP_CODE=$(curl -sS -w "%{http_code}" -o dist/data.raw.json "$URL" || true)
+          echo "==> GET (follow redirects) $URL"
+          # 關鍵：用 -L 跟隨 302；拿最後一跳的 HTTP code
+          HTTP_CODE=$(curl -sS -L -o dist/data.raw.json -w "%{http_code}" "$URL" || true)
           echo "HTTP_CODE=$HTTP_CODE"
 
           if [ "$HTTP_CODE" != "200" ]; then
             echo "::error ::GAS 回傳非 200，實際為 $HTTP_CODE"
-            echo "前 500 字回應內容："
+            echo "前 500 字回應內容："; head -c 500 dist/data.raw.json || true
+            exit 1
+          fi
+
+          # 若內容是 HTML（例如登入頁），也視為錯誤
+          if head -c 400 dist/data.raw.json | grep -qi '<html'; then
+            echo "::error ::收到 HTML（可能是登入頁或權限未開放）"
             head -c 500 dist/data.raw.json || true
             exit 1
           fi
 
-          # 先驗證 JSON；若失敗就把原文印出來
+          # 驗證 JSON
           node -e 'try{JSON.parse(require("fs").readFileSync("dist/data.raw.json","utf8"));}catch(e){console.error("JSON 解析失敗：",e.message);process.exit(1);}'
 
           # 正規化：若是 {ok:true,data:[...]} 就取 data；否則保持原狀
           node -e 'const fs=require("fs");let t=fs.readFileSync("dist/data.raw.json","utf8");let j=JSON.parse(t);if(j&&Array.isArray(j.data)) j=j.data;fs.writeFileSync("dist/data.json",JSON.stringify(j));'
 
-          # 額外檢查：必須是陣列
+          # 必須是陣列
           node -e 'const j=require("./dist/data.json");if(!Array.isArray(j)){console.error("期望為陣列，但得到：",typeof j);process.exit(1)}console.log("資料筆數：",j.length);if(j.length){console.log("第一筆：",JSON.stringify(j[0]).slice(0,200));}'
 
       - name: Upload artifact
